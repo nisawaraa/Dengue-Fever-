@@ -1,0 +1,2173 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "private_outputs": true,
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "uploaded = files.upload()\n"
+      ],
+      "metadata": {
+        "id": "g71J7iwg8sKF"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "uploaded = files.upload()\n"
+      ],
+      "metadata": {
+        "id": "awFSxFMt_Hqx"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "weather_data = pd.read_excel('rain.xlsx')\n",
+        "\n",
+        "print(weather_data.head())  # แสดงข้อมูล 5 แถวแรก เพื่อดูชื่อคอลัมน์\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "5hiOw-ms8yFT"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "file_path = 'rain.xlsx'\n",
+        "xls = pd.ExcelFile(file_path)\n",
+        "\n",
+        "df_list = []\n",
+        "for sheet in xls.sheet_names:\n",
+        "    df = pd.read_excel(xls, sheet_name=sheet)\n",
+        "    # เปลี่ยนชื่อคอลัมน์ให้เหมาะสม\n",
+        "    df = df.rename(columns={'ปี': 'year', 'เดือน': 'month', 'วันที่': 'day'})\n",
+        "    df['วัน'] = pd.to_datetime(df[['year', 'month', 'day']])\n",
+        "    df_list.append(df)\n",
+        "\n",
+        "# รวมทุกชีทเข้าด้วยกัน\n",
+        "weather_all = pd.concat(df_list, ignore_index=True)\n",
+        "\n",
+        "# เรียงข้อมูลตามวันที่\n",
+        "weather_all = weather_all.sort_values('วัน').reset_index(drop=True)\n",
+        "\n",
+        "# บันทึกไฟล์ใหม่\n",
+        "weather_all.to_excel('rain_all_years_sorted.xlsx', index=False)\n",
+        "print(\"✅ บันทึกไฟล์ rain_all_years_sorted.xlsx เรียบร้อยแล้ว\")\n"
+      ],
+      "metadata": {
+        "id": "_1jUAp6B9R9g"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "weather_data.to_excel('rain_sorted.xlsx', index=False)\n",
+        "print(\"✅ บันทึกไฟล์ rain_sorted.xlsx เรียบร้อยแล้ว\")\n"
+      ],
+      "metadata": {
+        "id": "vaFIlolP-CSZ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "# โหลดข้อมูลสภาพอากาศรายวัน\n",
+        "weather = pd.read_excel('rain_all_years_sorted.xlsx')\n",
+        "weather['วัน'] = pd.to_datetime(weather['วัน'])\n",
+        "\n",
+        "print(f\"ข้อมูล weather จาก {weather['วัน'].min()} ถึง {weather['วัน'].max()}\")  # เช็คช่วงวันที่\n",
+        "\n",
+        "# โหลดข้อมูลผู้ป่วย (รวมทุกชีท)\n",
+        "xls = pd.ExcelFile('DHFcc1.xlsx')\n",
+        "df_list = []\n",
+        "for sheet in xls.sheet_names:\n",
+        "    df = pd.read_excel(xls, sheet_name=sheet)\n",
+        "    df['วันเริ่มป่วย'] = pd.to_datetime(df['วันเริ่มป่วย'], errors='coerce')\n",
+        "    df_list.append(df)\n",
+        "patients = pd.concat(df_list, ignore_index=True)\n",
+        "\n",
+        "# กรองข้อมูลที่มีวันเริ่มป่วยที่ไม่ใช่ NaT\n",
+        "patients = patients.dropna(subset=['วันเริ่มป่วย'])\n",
+        "\n",
+        "print(f\"จำนวนผู้ป่วยที่มีวันเริ่มป่วย: {len(patients)}\")\n",
+        "\n",
+        "# เช็คชื่อคอลัมน์ weather ว่าตรงไหม\n",
+        "print(f\"คอลัมน์ weather: {weather.columns.tolist()}\")\n",
+        "\n",
+        "# ฟังก์ชันคำนวณค่าเฉลี่ยย้อนหลัง 15 วัน\n",
+        "def get_rolling_avg(date, n_days=15):\n",
+        "    start_date = date - pd.Timedelta(days=n_days)\n",
+        "    mask = (weather['วัน'] >= start_date) & (weather['วัน'] < date)\n",
+        "    subset = weather.loc[mask]\n",
+        "    if subset.empty:\n",
+        "        return pd.Series([None, None])\n",
+        "    return pd.Series([\n",
+        "        subset['อุณหภูมิ'].mean(),\n",
+        "        subset['ฝน'].mean()\n",
+        "    ])\n",
+        "\n",
+        "# คำนวณ rolling average ย้อนหลัง 15 วัน\n",
+        "patients[['temp_15d_avg', 'rain_15d_avg']] = patients['วันเริ่มป่วย'].apply(get_rolling_avg)\n",
+        "\n",
+        "# ตรวจสอบข้อมูลและดูว่ามีค่า missing กี่แถว\n",
+        "print(patients[['วันเริ่มป่วย', 'temp_15d_avg', 'rain_15d_avg']].head())\n",
+        "print(f\"จำนวนแถวที่ temp_15d_avg เป็น missing: {patients['temp_15d_avg'].isna().sum()}\")\n",
+        "print(f\"จำนวนแถวที่ rain_15d_avg เป็น missing: {patients['rain_15d_avg'].isna().sum()}\")\n",
+        "\n",
+        "# บันทึกไฟล์ใหม่\n",
+        "patients.to_excel('patients_with_15d_weather_avg.xlsx', index=False)\n",
+        "print(\"✅ บันทึกไฟล์เรียบร้อย: patients_with_15d_weather_avg.xlsx\")\n"
+      ],
+      "metadata": {
+        "id": "k_MB9gUt_E6-"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# เติมคอลัมน์ปี เดือน ไตรมาส ฤดูกาล จากวันเริ่มป่วย\n",
+        "patients['ปี'] = patients['วันเริ่มป่วย'].dt.year\n",
+        "patients['เดือน'] = patients['วันเริ่มป่วย'].dt.month\n",
+        "patients['ไตรมาส'] = patients['วันเริ่มป่วย'].dt.quarter\n",
+        "\n",
+        "# กำหนดฤดูกาลคร่าว ๆ ตามเดือน\n",
+        "def assign_season(month):\n",
+        "    if month in [3, 4, 5]:\n",
+        "        return 'Summer'\n",
+        "    elif month in [6, 7, 8, 9]:\n",
+        "        return 'Rainy'\n",
+        "    elif month in [10, 11, 12, 1, 2]:\n",
+        "        return 'Winter'\n",
+        "    return None\n",
+        "\n",
+        "patients['ฤดูกาล'] = patients['เดือน'].apply(assign_season)\n",
+        "\n",
+        "# แนะนำ: ลบค่า NaT ที่ยังอาจหลงเหลือ\n",
+        "patients = patients.dropna(subset=[\"วันเริ่มป่วย\"])\n"
+      ],
+      "metadata": {
+        "id": "-2nI90oWF4gR"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [],
+      "metadata": {
+        "id": "AMgPXMwKuoy-"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [],
+      "metadata": {
+        "id": "S91Qh7P2uo5h"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [],
+      "metadata": {
+        "id": "jx5AOzSMuo_B"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# นับจำนวนผู้ป่วยตามวันเริ่มป่วย\n",
+        "daily_counts = patients.groupby('วันเริ่มป่วย').size().reset_index(name='จำนวนผู้ป่วย')\n",
+        "\n",
+        "# ค่าเฉลี่ยสภาพอากาศย้อนหลัง 15 วัน ตามวันเริ่มป่วย\n",
+        "daily_weather = patients.groupby('วันเริ่มป่วย').agg({\n",
+        "    'temp_15d_avg': 'mean',\n",
+        "    'rain_15d_avg': 'mean'\n",
+        "}).reset_index()\n",
+        "\n",
+        "# รวมข้อมูลจำนวนผู้ป่วยและสภาพอากาศ\n",
+        "df_analysis = pd.merge(daily_counts, daily_weather, on='วันเริ่มป่วย', how='left')\n"
+      ],
+      "metadata": {
+        "id": "xBkkzdWSupNO"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เตรียมข้อมูล"
+      ],
+      "metadata": {
+        "id": "qC9UPThGu-zp"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# สมมติ demographics ก็ต้องมี 'วันเริ่มป่วย' ด้วยนะ\n",
+        "demographics = patients[['วันเริ่มป่วย', 'เพศ', 'อายุ(ปี)', 'อายุ(เดือน)', 'อาชีพ', 'ชื่อหมู่บ้าน',\n",
+        "                         'ตำบล', 'อำเภอ', 'เดือน', 'ปี', 'ไตรมาส', 'ฤดูกาล']].drop_duplicates()\n",
+        "\n",
+        "# merge โดยใช้ 'วันเริ่มป่วย'\n",
+        "df_model = pd.merge(df_analysis, demographics, on='วันเริ่มป่วย', how='left')\n",
+        "\n",
+        "# เปลี่ยนชื่อคอลัมน์เป็นอังกฤษ\n",
+        "df_model = df_model.rename(columns={\n",
+        "    'วันเริ่มป่วย': 'start_date',\n",
+        "    'จำนวนผู้ป่วย': 'cases',\n",
+        "    'เพศ': 'gender',\n",
+        "    'อายุ(ปี)': 'age_year',\n",
+        "    'อายุ(เดือน)': 'age_month',\n",
+        "    'อาชีพ': 'occupation',\n",
+        "    'ชื่อหมู่บ้าน': 'village',\n",
+        "    'ตำบล': 'sub_district',\n",
+        "    'อำเภอ': 'district',\n",
+        "    'เดือน': 'month',\n",
+        "    'ปี': 'year',\n",
+        "    'ไตรมาส': 'quarter',\n",
+        "    'ฤดูกาล': 'season',\n",
+        "    'temp_15d_avg': 'temp',\n",
+        "    'rain_15d_avg': 'rain'\n",
+        "}).copy()\n",
+        "\n",
+        "# เติมค่า missing\n",
+        "df_model = df_model.fillna(0)\n"
+      ],
+      "metadata": {
+        "id": "EGz9kOFWvBH5"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# วิเคราะห์ตัวแปรเชิงตัวเลขทั้งหมด"
+      ],
+      "metadata": {
+        "id": "5bTSq2rgWYvl"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "import statsmodels.api as sm\n",
+        "from patsy import dmatrices\n",
+        "\n",
+        "# สมมติ df_model มีคอลัมน์ตามนี้ (ถ้ายังไม่มี เปลี่ยนชื่อให้ตรงกับจริง)\n",
+        "# 'cases' = จำนวนผู้ป่วย\n",
+        "# 'age_year', 'age_month', 'temp', 'rain' (numeric variables)\n",
+        "\n",
+        "# ตรวจสอบว่าคอลัมน์มีครบ\n",
+        "numeric_vars = ['age_year', 'age_month', 'temp', 'rain']\n",
+        "\n",
+        "# เติมค่า missing ด้วย 0 หรือค่าเหมาะสมก่อน (หากมี)\n",
+        "df_model[numeric_vars] = df_model[numeric_vars].fillna(0)\n",
+        "\n",
+        "# สูตรสำหรับ Patsy (ใช้แค่ตัวเลข)\n",
+        "formula_num = 'cases ~ ' + ' + '.join(numeric_vars)\n",
+        "\n",
+        "# สร้าง y และ X\n",
+        "y, X = dmatrices(formula_num, df_model, return_type='dataframe')\n",
+        "\n",
+        "# ฟิตโมเดล Negative Binomial\n",
+        "nb_model_num = sm.GLM(y, X, family=sm.families.NegativeBinomial()).fit()\n",
+        "\n",
+        "# แสดงผลลัพธ์\n",
+        "print(nb_model_num.summary())\n",
+        "\n",
+        "# กรองตัวแปรสำคัญ p-value < 0.05\n",
+        "significant_vars = nb_model_num.pvalues[nb_model_num.pvalues < 0.05].index.tolist()\n",
+        "print(\"\\nตัวแปรเชิงตัวเลขที่มีนัยสำคัญทางสถิติ (p-value < 0.05):\")\n",
+        "for var in significant_vars:\n",
+        "    print(f\"- {var}\")\n"
+      ],
+      "metadata": {
+        "id": "v9WvHd7lWFBO"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## วิเคราะห์ตัวเลข + หมวดหมู่ ด้วย Negative Binomial Regression"
+      ],
+      "metadata": {
+        "id": "N7345FkrWMQz"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "import statsmodels.api as sm\n",
+        "from patsy import dmatrices\n",
+        "\n",
+        "# สมมติ df_model มีคอลัมน์ครบ ตามนี้\n",
+        "# ตัวแปรตัวเลข: age_year, age_month, temp, rain\n",
+        "# ตัวแปรหมวดหมู่: gender, occupation, village, sub_district, district, month, year, quarter, season\n",
+        "# ตัวแปรเป้าหมาย: cases\n",
+        "\n",
+        "# เติมค่า missing (ถ้ามี)\n",
+        "df_model = df_model.fillna(0)\n",
+        "\n",
+        "# สูตร Patsy รวมตัวเลข + ตัวแปรหมวดหมู่\n",
+        "formula_all = '''\n",
+        "cases ~ age_year + age_month + temp + rain\n",
+        "        + C(gender) + C(occupation) + C(village) + C(sub_district) + C(district)\n",
+        "        + C(month) + C(year) + C(quarter) + C(season)\n",
+        "'''\n",
+        "\n",
+        "# สร้าง y, X\n",
+        "y, X = dmatrices(formula_all, df_model, return_type='dataframe')\n",
+        "\n",
+        "# ฟิตโมเดล Negative Binomial\n",
+        "nb_model_all = sm.GLM(y, X, family=sm.families.NegativeBinomial()).fit()\n",
+        "\n",
+        "# แสดงผลลัพธ์เต็ม\n",
+        "print(nb_model_all.summary())\n",
+        "\n",
+        "# หาเฉพาะตัวแปรสำคัญ (p-value < 0.05)\n",
+        "significant_vars = nb_model_all.pvalues[nb_model_all.pvalues < 0.05].index.tolist()\n",
+        "\n",
+        "print(\"\\nตัวแปรสำคัญที่มีนัยสำคัญ (p-value < 0.05):\")\n",
+        "for var in significant_vars:\n",
+        "    print(f\"- {var}\")\n",
+        "\n",
+        "# --- ถ้าต้องการกรอง X เฉพาะตัวแปรสำคัญเพื่อโมเดลใหม่ ---\n",
+        "\n",
+        "X_significant = X[significant_vars]\n",
+        "nb_model_significant = sm.GLM(y, X_significant, family=sm.families.NegativeBinomial()).fit()\n",
+        "\n",
+        "print(\"\\nผลโมเดลหลังกรองเฉพาะตัวแปรสำคัญ:\")\n",
+        "print(nb_model_significant.summary())\n"
+      ],
+      "metadata": {
+        "id": "ky0tVYf2WPqN"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# ฟิตโมเดล Poisson regression (แบบเดียวกับ NB แต่เปลี่ยน family)"
+      ],
+      "metadata": {
+        "id": "D4hys4DxWh7V"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "AXTPbuRpWpRA"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import statsmodels.api as sm\n",
+        "\n",
+        "# ใช้ตัวแปร X, y เดิมที่เตรียมไว้แล้ว\n",
+        "\n",
+        "poisson_model = sm.GLM(y, X, family=sm.families.Poisson()).fit()\n",
+        "\n",
+        "print(poisson_model.summary())\n"
+      ],
+      "metadata": {
+        "id": "PBkLPS77Wi3x"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เปรียบเทียบผลลัพธ์ระหว่าง Poisson กับ Negative Binomial"
+      ],
+      "metadata": {
+        "id": "enNMZ4IqWm3N"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "ดูค่า deviance และ Pearson chi2 ของทั้งสองโมเดล\n",
+        "\n",
+        "ดูค่า overdispersion (dispersion parameter)"
+      ],
+      "metadata": {
+        "id": "K863q8GfWqwY"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# หาค่า Pearson chi2 / df_resid\n",
+        "pearson_chi2 = poisson_model.pearson_chi2\n",
+        "df_resid = poisson_model.df_resid\n",
+        "dispersion = pearson_chi2 / df_resid\n",
+        "\n",
+        "print(f\"Dispersion parameter = {dispersion:.2f}\")\n",
+        "if dispersion > 1.5:\n",
+        "    print(\"มี overdispersion สูง ควรใช้ Negative Binomial แทน Poisson\")\n",
+        "else:\n",
+        "    print(\"ไม่มี overdispersion มาก Poisson น่าจะโอเค\")\n"
+      ],
+      "metadata": {
+        "id": "s2gvFabzWtT_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เช็คตัวแปรสำคัญ (p-value < 0.05)"
+      ],
+      "metadata": {
+        "id": "xWzaG8k9W9eS"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "# สรุปค่าจากโมเดล\n",
+        "summary_df = pd.DataFrame({\n",
+        "    'coef': nb_model.params,\n",
+        "    'p_value': nb_model.pvalues\n",
+        "})\n",
+        "\n",
+        "# กรองเฉพาะตัวแปรที่มี p-value < 0.05\n",
+        "significant_vars = summary_df[summary_df['p_value'] < 0.05]\n",
+        "\n",
+        "# เรียงจาก p-value น้อยที่สุดก่อน\n",
+        "significant_vars = significant_vars.sort_values('p_value')\n",
+        "\n",
+        "print(\"✅ ตัวแปรที่มีผลสำคัญต่อจำนวนผู้ป่วย (p-value < 0.05):\")\n",
+        "print(significant_vars)\n"
+      ],
+      "metadata": {
+        "id": "zU1NlLlGXE-h"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เตรียมข้อมูล X และ y สำหรับ XGBoost"
+      ],
+      "metadata": {
+        "id": "LsweH4OnXYz6"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "from sklearn.preprocessing import OneHotEncoder\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "import xgboost as xgb\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "# ✳️ กำหนดตัวแปรเป้าหมาย และ feature\n",
+        "y = df_model['cases']\n",
+        "X = df_model.drop(columns=['cases'])\n",
+        "\n",
+        "# ✳️ แยกประเภทตัวแปร\n",
+        "categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()\n",
+        "numeric_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()\n",
+        "\n",
+        "# ✳️ บังคับ categorical เป็น string\n",
+        "X[categorical_cols] = X[categorical_cols].astype(str)\n",
+        "\n",
+        "# ✳️ One-hot encode (แก้ตรงนี้)\n",
+        "encoder = OneHotEncoder(handle_unknown='ignore')\n",
+        "X_encoded_cat = pd.DataFrame(\n",
+        "    encoder.fit_transform(X[categorical_cols]).toarray(),\n",
+        "    columns=encoder.get_feature_names_out(categorical_cols)\n",
+        ")\n",
+        "\n",
+        "# ✳️ รวม numeric + encoded categorical\n",
+        "X_all = pd.concat([X[numeric_cols].reset_index(drop=True),\n",
+        "                   X_encoded_cat.reset_index(drop=True)], axis=1)\n",
+        "\n",
+        "# ✳️ แบ่ง train/test\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X_all, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# ✳️ เทรน XGBoost\n",
+        "model = xgb.XGBRegressor(objective='reg:squarederror', random_state=42)\n",
+        "model.fit(X_train, y_train)\n",
+        "\n",
+        "# ✳️ ทำนายและประเมินผล\n",
+        "y_pred = model.predict(X_test)\n",
+        "\n",
+        "# ใช้วิธีนี้สำหรับเวอร์ชันเก่าและใหม่ของ sklearn\n",
+        "try:\n",
+        "    rmse = mean_squared_error(y_test, y_pred, squared=False)\n",
+        "except TypeError:\n",
+        "    # กรณีไม่รองรับ 'squared'\n",
+        "    mse = mean_squared_error(y_test, y_pred)\n",
+        "    rmse = mse ** 0.5\n",
+        "\n",
+        "r2 = r2_score(y_test, y_pred)\n",
+        "\n",
+        "print(f\"✅ RMSE: {rmse:.2f}\")\n",
+        "print(f\"✅ R²: {r2:.2f}\")\n"
+      ],
+      "metadata": {
+        "id": "qTgvArI4XeNG"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เอาตัวแปรที่ผ่าน"
+      ],
+      "metadata": {
+        "id": "lUnkSki9ZPEW"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "significant_vars = ['year', 'month', 'quarter', 'village']\n",
+        "\n",
+        "# เลือกเฉพาะตัวแปรสำคัญ\n",
+        "X_sig = df_model[significant_vars]\n",
+        "\n",
+        "# แยกประเภทตัวแปรสำคัญ\n",
+        "categorical_cols_sig = X_sig.select_dtypes(include=['object', 'category']).columns.tolist()\n",
+        "numeric_cols_sig = X_sig.select_dtypes(include=['int64', 'float64']).columns.tolist()\n",
+        "\n",
+        "# บังคับ categorical เป็น string\n",
+        "X_sig[categorical_cols_sig] = X_sig[categorical_cols_sig].astype(str)\n",
+        "\n",
+        "# One-hot encode เฉพาะ categorical\n",
+        "encoder = OneHotEncoder(handle_unknown='ignore')\n",
+        "X_encoded_cat_sig = pd.DataFrame(\n",
+        "    encoder.fit_transform(X_sig[categorical_cols_sig]).toarray(),\n",
+        "    columns=encoder.get_feature_names_out(categorical_cols_sig)\n",
+        ")\n",
+        "\n",
+        "# รวม numeric + encoded categorical\n",
+        "X_all_sig = pd.concat([X_sig[numeric_cols_sig].reset_index(drop=True),\n",
+        "                       X_encoded_cat_sig.reset_index(drop=True)], axis=1)\n",
+        "\n",
+        "# กำหนดตัวแปรเป้าหมาย\n",
+        "y = df_model['cases']\n",
+        "\n",
+        "# แบ่ง train/test\n",
+        "X_train_sig, X_test_sig, y_train_sig, y_test_sig = train_test_split(X_all_sig, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# เทรน XGBoost\n",
+        "model_sig = xgb.XGBRegressor(objective='reg:squarederror', random_state=42)\n",
+        "model_sig.fit(X_train_sig, y_train_sig)\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "from math import sqrt\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "y_pred_sig = model_sig.predict(X_test_sig)\n",
+        "rmse_sig = sqrt(mean_squared_error(y_test_sig, y_pred_sig))  # แก้ตรงนี้\n",
+        "r2_sig = r2_score(y_test_sig, y_pred_sig)\n",
+        "\n",
+        "print(f\"✅ RMSE (Significant vars): {rmse_sig:.2f}\")\n",
+        "print(f\"✅ R² (Significant vars): {r2_sig:.2f}\")\n"
+      ],
+      "metadata": {
+        "id": "MOEnN2AkZTkC"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Random Forest"
+      ],
+      "metadata": {
+        "id": "cWVO9ifHaKCi"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "from sklearn.preprocessing import OneHotEncoder\n",
+        "\n",
+        "# กำหนดตัวแปรเป้าหมาย และ feature (ใช้ตัวแปรทั้งหมด ยกเว้น 'cases')\n",
+        "y = df_model['cases']\n",
+        "X = df_model.drop(columns=['cases'])\n",
+        "\n",
+        "# แยกประเภทตัวแปร\n",
+        "categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()\n",
+        "numeric_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()\n",
+        "\n",
+        "# บังคับ categorical เป็น string\n",
+        "X[categorical_cols] = X[categorical_cols].astype(str)\n",
+        "\n",
+        "# One-hot encode เฉพาะ categorical\n",
+        "encoder = OneHotEncoder(handle_unknown='ignore')\n",
+        "X_encoded_cat = pd.DataFrame(\n",
+        "    encoder.fit_transform(X[categorical_cols]).toarray(),\n",
+        "    columns=encoder.get_feature_names_out(categorical_cols)\n",
+        ")\n",
+        "\n",
+        "# รวม numeric + encoded categorical\n",
+        "X_all = pd.concat([X[numeric_cols].reset_index(drop=True),\n",
+        "                   X_encoded_cat.reset_index(drop=True)], axis=1)\n",
+        "\n",
+        "# แบ่ง train/test\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X_all, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# สร้างและเทรน Random Forest\n",
+        "rf_model = RandomForestRegressor(random_state=42)\n",
+        "rf_model.fit(X_train, y_train)\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "import numpy as np\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "y_pred = rf_model.predict(X_test)\n",
+        "\n",
+        "mse = mean_squared_error(y_test, y_pred)\n",
+        "rmse = np.sqrt(mse)\n",
+        "\n",
+        "r2 = r2_score(y_test, y_pred)\n",
+        "\n",
+        "print(f\"✅ RMSE (All vars, RF): {rmse:.2f}\")\n",
+        "print(f\"✅ R² (All vars, RF): {r2:.2f}\")\n",
+        "\n",
+        "\n",
+        "# ดูความสำคัญของตัวแปร\n",
+        "importances = rf_model.feature_importances_\n",
+        "feature_names = X_all.columns\n",
+        "\n",
+        "feature_importance_df = pd.DataFrame({\n",
+        "    'feature': feature_names,\n",
+        "    'importance': importances\n",
+        "}).sort_values(by='importance', ascending=False)\n",
+        "\n",
+        "print(\"\\nFeature importance:\")\n",
+        "print(feature_importance_df)\n"
+      ],
+      "metadata": {
+        "id": "mCatXCwBaNnA"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เอาเเค่ที่เข้า"
+      ],
+      "metadata": {
+        "id": "MqsJTVCRas-w"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "from sklearn.preprocessing import OneHotEncoder\n",
+        "\n",
+        "# สมมติว่า df_model, significant_vars มีข้อมูลพร้อมแล้ว\n",
+        "\n",
+        "# เลือกเฉพาะตัวแปรสำคัญ\n",
+        "X_sig = df_model[significant_vars]\n",
+        "\n",
+        "# แยกประเภทตัวแปร\n",
+        "categorical_cols_sig = X_sig.select_dtypes(include=['object', 'category']).columns.tolist()\n",
+        "numeric_cols_sig = X_sig.select_dtypes(include=['int64', 'float64']).columns.tolist()\n",
+        "\n",
+        "# บังคับ categorical เป็น string\n",
+        "X_sig.loc[:, categorical_cols_sig] = X_sig[categorical_cols_sig].astype(str)\n",
+        "\n",
+        "\n",
+        "# One-hot encode เฉพาะ categorical\n",
+        "encoder = OneHotEncoder(handle_unknown='ignore')\n",
+        "X_encoded_cat_sig = pd.DataFrame(\n",
+        "    encoder.fit_transform(X_sig[categorical_cols_sig]).toarray(),\n",
+        "    columns=encoder.get_feature_names_out(categorical_cols_sig)\n",
+        ")\n",
+        "\n",
+        "# รวม numeric + encoded categorical\n",
+        "X_all_sig = pd.concat([X_sig[numeric_cols_sig].reset_index(drop=True),\n",
+        "                       X_encoded_cat_sig.reset_index(drop=True)], axis=1)\n",
+        "\n",
+        "# ตัวแปรเป้าหมาย\n",
+        "y = df_model['cases']\n",
+        "\n",
+        "# แบ่ง train/test\n",
+        "X_train_sig, X_test_sig, y_train_sig, y_test_sig = train_test_split(X_all_sig, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# สร้างและเทรน Random Forest\n",
+        "rf_model = RandomForestRegressor(random_state=42)\n",
+        "rf_model.fit(X_train_sig, y_train_sig)\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "import numpy as np\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "mse_sig = mean_squared_error(y_test_sig, y_pred_sig)\n",
+        "rmse_sig = np.sqrt(mse_sig)\n",
+        "\n",
+        "r2_sig = r2_score(y_test_sig, y_pred_sig)\n",
+        "\n",
+        "print(f\"✅ RMSE (Significant vars, RF): {rmse_sig:.2f}\")\n",
+        "print(f\"✅ R² (Significant vars, RF): {r2_sig:.2f}\")\n",
+        "\n",
+        "\n",
+        "# ดูความสำคัญของตัวแปร\n",
+        "importances = rf_model.feature_importances_\n",
+        "feature_names = X_all_sig.columns\n",
+        "\n",
+        "feature_importance_df = pd.DataFrame({\n",
+        "    'feature': feature_names,\n",
+        "    'importance': importances\n",
+        "}).sort_values(by='importance', ascending=False)\n",
+        "\n",
+        "print(\"\\nFeature importance:\")\n",
+        "print(feature_importance_df)\n"
+      ],
+      "metadata": {
+        "id": "r_P4RKtgavCw"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Deep learning"
+      ],
+      "metadata": {
+        "id": "dNq1GV1LbnYh"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Deep Learning ใช้ ตัวแปรทั้งหมด"
+      ],
+      "metadata": {
+        "id": "BIige3OKcSts"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.preprocessing import OneHotEncoder, StandardScaler\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "import tensorflow as tf\n",
+        "from tensorflow.keras.models import Sequential\n",
+        "from tensorflow.keras.layers import Dense\n",
+        "\n",
+        "# ตัวแปรเป้าหมายและ feature\n",
+        "y = df_model['cases'].values\n",
+        "X = df_model.drop(columns=['cases'])\n",
+        "\n",
+        "# แยกประเภทตัวแปร\n",
+        "categorical_cols = X.select_dtypes(include=['object', 'category']).columns.tolist()\n",
+        "numeric_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()\n",
+        "\n",
+        "# แปลง categorical เป็น string\n",
+        "X[categorical_cols] = X[categorical_cols].astype(str)\n",
+        "\n",
+        "# One-hot encode categorical\n",
+        "encoder = OneHotEncoder(handle_unknown='ignore')\n",
+        "X_encoded_cat = encoder.fit_transform(X[categorical_cols]).toarray()\n",
+        "\n",
+        "# Scale numeric\n",
+        "scaler = StandardScaler()\n",
+        "X_scaled_num = scaler.fit_transform(X[numeric_cols])\n",
+        "\n",
+        "# รวม numeric + encoded categorical\n",
+        "X_all = np.hstack([X_scaled_num, X_encoded_cat])\n",
+        "\n",
+        "# แบ่ง train/test\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X_all, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# สร้างโมเดลง่าย ๆ\n",
+        "model_all = Sequential([\n",
+        "    Dense(64, activation='relu', input_shape=(X_train.shape[1],)),\n",
+        "    Dense(32, activation='relu'),\n",
+        "    Dense(1)\n",
+        "])\n",
+        "\n",
+        "model_all.compile(optimizer='adam', loss='mse')\n",
+        "\n",
+        "# เทรน\n",
+        "model_all.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1)\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "import numpy as np\n",
+        "\n",
+        "rmse_all = np.sqrt(mean_squared_error(y_test, y_pred_all))  # คำนวณ RMSE ด้วย sqrt ของ MSE\n",
+        "r2_all = r2_score(y_test, y_pred_all)\n",
+        "\n",
+        "\n",
+        "print(f\"✅ RMSE (All vars): {rmse_all:.2f}\")\n",
+        "print(f\"✅ R² (All vars): {r2_all:.2f}\")\n"
+      ],
+      "metadata": {
+        "id": "5u6EJW6KbrT3"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "ใช้ เฉพาะตัวแปรที่มีนัยสำคัญ (p-value < 0.05)"
+      ],
+      "metadata": {
+        "id": "XaS35yeUcW0h"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import numpy as np\n",
+        "from sklearn.preprocessing import OneHotEncoder, StandardScaler\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "from tensorflow.keras.models import Sequential\n",
+        "from tensorflow.keras.layers import Dense\n",
+        "\n",
+        "# รายชื่อตัวแปรที่มีนัยสำคัญ (ปรับตามผลวิเคราะห์ของคุณ)\n",
+        "significant_vars = ['year', 'month', 'quarter', 'village']\n",
+        "\n",
+        "# เลือกเฉพาะตัวแปรสำคัญ\n",
+        "X_sig = df_model[significant_vars].copy()  # copy เพื่อแก้ warning\n",
+        "\n",
+        "# แยกประเภทตัวแปรสำคัญ\n",
+        "categorical_cols_sig = X_sig.select_dtypes(include=['object', 'category']).columns.tolist()\n",
+        "numeric_cols_sig = X_sig.select_dtypes(include=['int64', 'float64']).columns.tolist()\n",
+        "\n",
+        "# แปลง categorical เป็น string (ใช้ .loc เพื่อลด SettingWithCopyWarning)\n",
+        "X_sig.loc[:, categorical_cols_sig] = X_sig.loc[:, categorical_cols_sig].astype(str)\n",
+        "\n",
+        "# One-hot encode เฉพาะ categorical\n",
+        "encoder_sig = OneHotEncoder(handle_unknown='ignore', sparse_output=False)\n",
+        "\n",
+        "X_encoded_cat_sig = encoder_sig.fit_transform(X_sig[categorical_cols_sig])\n",
+        "\n",
+        "# Scale numeric (ถ้ามีตัวเลข)\n",
+        "if len(numeric_cols_sig) > 0:\n",
+        "    scaler_sig = StandardScaler()\n",
+        "    X_scaled_num_sig = scaler_sig.fit_transform(X_sig[numeric_cols_sig])\n",
+        "else:\n",
+        "    X_scaled_num_sig = np.empty((X_sig.shape[0], 0))  # สร้าง array ว่างถ้าไม่มี numeric\n",
+        "\n",
+        "# รวม numeric + encoded categorical\n",
+        "X_all_sig = np.hstack([X_scaled_num_sig, X_encoded_cat_sig])\n",
+        "\n",
+        "# กำหนด target\n",
+        "y = df_model['cases'].values\n",
+        "\n",
+        "# แบ่ง train/test\n",
+        "X_train_sig, X_test_sig, y_train_sig, y_test_sig = train_test_split(X_all_sig, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# สร้างโมเดล\n",
+        "model_sig = Sequential([\n",
+        "    Dense(64, activation='relu', input_shape=(X_train_sig.shape[1],)),\n",
+        "    Dense(32, activation='relu'),\n",
+        "    Dense(1)\n",
+        "])\n",
+        "\n",
+        "model_sig.compile(optimizer='adam', loss='mse')\n",
+        "\n",
+        "# เทรน\n",
+        "model_sig.fit(X_train_sig, y_train_sig, epochs=50, batch_size=32, validation_split=0.1)\n",
+        "\n",
+        "# ทำนายและประเมินผล\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "mse = mean_squared_error(y_test_sig, y_pred_sig)\n",
+        "rmse_sig = mse ** 0.5  # แปลง MSE เป็น RMSE ด้วยการถอดรากที่สอง\n",
+        "\n",
+        "r2_sig = r2_score(y_test_sig, y_pred_sig)\n",
+        "\n",
+        "\n",
+        "print(f\"✅ RMSE (Significant vars): {rmse_sig:.2f}\")\n",
+        "print(f\"✅ R² (Significant vars): {r2_sig:.2f}\")\n"
+      ],
+      "metadata": {
+        "id": "a5GFuaPubmBM"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "WFhs9HA_bmFJ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "HyWelkPtbmJf"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "QyKMctqAbmNB"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "D-IEdD9WbmRL"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "NCfWKC9BbmU-"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "iPq9oiEabmY0"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "1. สร้างตัวแปรตาม (y) และตัวแปรอิสระ (X) ด้วย Patsy"
+      ],
+      "metadata": {
+        "id": "auDBT8OKTo3v"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from patsy import dmatrices\n",
+        "\n",
+        "formula = '''\n",
+        "cases ~ age_year + age_month + temp + rain\n",
+        "        + C(gender) + C(occupation) + C(village) + C(sub_district) + C(district)\n",
+        "        + C(month) + C(year) + C(quarter) + C(season)\n",
+        "'''\n",
+        "\n",
+        "y, X = dmatrices(formula, df_model, return_type='dataframe')\n"
+      ],
+      "metadata": {
+        "id": "Qjqbd_RWTGCA"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "mean_cases = df_model['cases'].mean()\n",
+        "var_cases = df_model['cases'].var()\n",
+        "\n",
+        "print(f\"Mean: {mean_cases}\")\n",
+        "print(f\"Variance: {var_cases}\")\n",
+        "\n",
+        "if var_cases > mean_cases:\n",
+        "    print(\"มีแนวโน้ม Overdispersion (variance > mean)\")\n",
+        "else:\n",
+        "    print(\"ข้อมูลอาจเหมาะกับ Poisson model (variance <= mean)\")\n"
+      ],
+      "metadata": {
+        "id": "zXnL3hDGUU1x"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "2. ฟิตโมเดล Negative Binomial Regression ด้วย statsmodels"
+      ],
+      "metadata": {
+        "id": "TyMQ_WpETq_b"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import statsmodels.api as sm\n",
+        "\n",
+        "nb_model = sm.GLM(y, X, family=sm.families.NegativeBinomial()).fit()\n"
+      ],
+      "metadata": {
+        "id": "eCszrjATTIQr"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(nb_model.summary())\n"
+      ],
+      "metadata": {
+        "id": "xM2zB_woTKAF"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "ดกรองตัวแปรสำคัญ"
+      ],
+      "metadata": {
+        "id": "yAl5hQCrU97r"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "# สร้าง DataFrame จากผลลัพธ์ของโมเดล\n",
+        "summary_df = pd.DataFrame({\n",
+        "    'coef': nb_model.params,\n",
+        "    'p_value': nb_model.pvalues\n",
+        "})\n",
+        "\n",
+        "# กรองเฉพาะตัวแปรที่ p-value < 0.05 (นัยสำคัญ)\n",
+        "significant_vars = summary_df[summary_df['p_value'] < 0.05]\n",
+        "\n",
+        "# เรียงลำดับตัวแปรตาม p-value (จากน้อยไปมาก)\n",
+        "significant_vars = significant_vars.sort_values('p_value')\n",
+        "\n",
+        "print(\"ตัวแปรที่มีนัยสำคัญ (p-value < 0.05):\")\n",
+        "print(significant_vars)\n"
+      ],
+      "metadata": {
+        "id": "RrAKQjTHQmHI"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# ดูค่าประมาณ coefficient และ p-value\n",
+        "print(nb_model.summary())\n",
+        "\n",
+        "# เพิ่มคอลัมน์ผลลัพธ์ทำนาย\n",
+        "df_model['predicted_cases'] = nb_model.predict(X)\n",
+        "\n",
+        "# ดูข้อมูลเปรียบเทียบ\n",
+        "print(df_model[['cases', 'predicted_cases']].head())\n",
+        "\n",
+        "# plot เปรียบเทียบจริงกับทำนาย (optional)\n",
+        "import matplotlib.pyplot as plt\n",
+        "plt.scatter(df_model['cases'], df_model['predicted_cases'])\n",
+        "plt.xlabel('Observed Cases')\n",
+        "plt.ylabel('Predicted Cases')\n",
+        "plt.title('Observed vs Predicted Cases')\n",
+        "plt.show()\n"
+      ],
+      "metadata": {
+        "id": "kcUDx2MZPbsQ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "# เอาตาราง summary มาเป็น DataFrame\n",
+        "summary_df = pd.DataFrame({\n",
+        "    'coef': nb_model.params,\n",
+        "    'p_value': nb_model.pvalues\n",
+        "})\n",
+        "\n",
+        "# กรองเฉพาะตัวแปรที่ p-value < 0.05 (significant)\n",
+        "significant_vars = summary_df[summary_df['p_value'] < 0.05]\n",
+        "\n",
+        "# เรียงลำดับตาม p-value น้อยไปมาก (ตัวที่สำคัญที่สุดขึ้นก่อน)\n",
+        "significant_vars = significant_vars.sort_values('p_value')\n",
+        "\n",
+        "print(\"ตัวแปรที่มีผลสำคัญ (p-value < 0.05):\")\n",
+        "print(significant_vars)\n"
+      ],
+      "metadata": {
+        "id": "0XR8R6xtROPz"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# 2. วิเคราะห์ความสัมพันธ์ (เช่น ใช้ Chi-square กับ categorical variables หรือ Correlation กับ numeric variables)"
+      ],
+      "metadata": {
+        "id": "KMVNB0f2vGlf"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "สำหรับตัวแปร Categorical (เช่น เพศ, อาชีพ, ตำบล, ฯลฯ) ใช้ Chi-square test\n",
+        "\n",
+        "สำหรับตัวแปร Numeric (เช่น อายุ, temp_15d_avg, rain_15d_avg) ใช้ Correlation"
+      ],
+      "metadata": {
+        "id": "LIM_-T_SvIBe"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# นับจำนวนผู้ป่วยตามกลุ่มตัวแปร\n",
+        "patient_counts = patients.groupby(group_vars).size().reset_index(name='จำนวนผู้ป่วย')\n",
+        "\n",
+        "# ใช้ patient_counts แทนการใช้ patients ในการวิเคราะห์\n"
+      ],
+      "metadata": {
+        "id": "e92RVA4SvIup"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "9iKfFhx1NocW"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "from scipy.stats import chi2_contingency\n",
+        "\n",
+        "# สร้างตารางนับจำนวนผู้ป่วยตาม วันพบผป และรวมค่าตัวแปรอื่น ๆ โดยการ groupby ตาม วันพบผป\n",
+        "daily_counts = patients.groupby('วันพบผป').size().reset_index(name='จำนวนผู้ป่วย')\n",
+        "\n",
+        "# รวมข้อมูลรายวันกับค่าตัวแปรอื่น ๆ (เช่น ค่าเฉลี่ย temp_15d_avg, rain_15d_avg ตามวันพบผป)\n",
+        "daily_vars = patients.groupby('วันพบผป').agg({\n",
+        "    'อายุ(ปี)': 'mean',\n",
+        "    'อายุ(เดือน)': 'mean',\n",
+        "    'temp_15d_avg': 'mean',\n",
+        "    'rain_15d_avg': 'mean',\n",
+        "    'เพศ': lambda x: x.mode()[0] if not x.mode().empty else None,  # เช็คกรณี mode ว่าง\n",
+        "    'อาชีพ': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ชื่อหมู่บ้าน': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ตำบล': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'อำเภอ': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'เดือน': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ปี': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ไตรมาส': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ฤดูกาล': lambda x: x.mode()[0] if not x.mode().empty else None\n",
+        "}).reset_index()\n",
+        "\n",
+        "# รวมข้อมูลเข้าด้วยกัน\n",
+        "df_analysis = pd.merge(daily_counts, daily_vars, on='วันพบผป')\n",
+        "\n",
+        "# แยกตัวแปร numeric กับ categorical\n",
+        "numeric_vars = ['อายุ(ปี)', 'อายุ(เดือน)', 'temp_15d_avg', 'rain_15d_avg']\n",
+        "categorical_vars = ['เพศ', 'อาชีพ', 'ชื่อหมู่บ้าน', 'ตำบล', 'อำเภอ', 'เดือน', 'ปี', 'ไตรมาส', 'ฤดูกาล']\n",
+        "\n",
+        "print(\"=== Numeric Variables Correlation with จำนวนผู้ป่วย ===\")\n",
+        "for var in numeric_vars:\n",
+        "    corr = df_analysis[var].corr(df_analysis['จำนวนผู้ป่วย'])\n",
+        "    print(f\"{var} vs จำนวนผู้ป่วย: correlation = {corr:.4f}\")\n",
+        "\n",
+        "print(\"\\n=== Categorical Variables Association with จำนวนผู้ป่วย (Chi-square test) ===\")\n",
+        "\n",
+        "# แก้ตรงนี้: แปลงจำนวนผู้ป่วยเป็นกลุ่ม (binned) ด้วย pd.qcut พร้อม drop duplicates\n",
+        "df_analysis['จำนวนผู้ป่วยกลุ่ม'] = pd.qcut(df_analysis['จำนวนผู้ป่วย'], q=3, labels=False, duplicates='drop')\n",
+        "\n",
+        "for var in categorical_vars:\n",
+        "    contingency_table = pd.crosstab(df_analysis[var], df_analysis['จำนวนผู้ป่วยกลุ่ม'])\n",
+        "\n",
+        "    # เช็คถ้ากลุ่มข้อมูลไม่ครบ (แถวหรือคอลัมน์น้อยกว่า 2)\n",
+        "    if contingency_table.shape[0] < 2 or contingency_table.shape[1] < 2:\n",
+        "        print(f\"{var} ไม่สามารถทำ Chi-square ได้ เนื่องจากกลุ่มข้อมูลไม่ครบ\")\n",
+        "        continue\n",
+        "\n",
+        "    chi2, p, dof, ex = chi2_contingency(contingency_table)\n",
+        "    print(f\"{var} vs จำนวนผู้ป่วย (กลุ่ม): p-value = {p:.4f}\")\n"
+      ],
+      "metadata": {
+        "id": "Y2Sx6WmOwzDE"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "overdispersion_ratio = var_y / mean_y\n",
+        "print(\"Overdispersion ratio (variance/mean):\", overdispersion_ratio.values[0])  # ดึงค่า scalar\n",
+        "\n",
+        "if overdispersion_ratio.values[0] > 1.5:  # เปรียบเทียบ scalar\n",
+        "    print(\"มี overdispersion แนะนำใช้ Negative Binomial Regression\")\n",
+        "else:\n",
+        "    print(\"ไม่มี overdispersion ใช้ Poisson Regression ได้\")\n"
+      ],
+      "metadata": {
+        "id": "f8EO115WGsoB"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "df_analysis.rename(columns={\n",
+        "    'จำนวนผู้ป่วย': 'cases',\n",
+        "    'temp_15d_avg': 'temp_15d_avg',\n",
+        "    'ชื่อหมู่บ้าน': 'village',\n",
+        "    'ตำบล': 'sub_district',\n",
+        "    'อำเภอ': 'district',\n",
+        "    'เดือน': 'month',\n",
+        "    'ปี': 'year',\n",
+        "    'ไตรมาส': 'quarter',\n",
+        "    'ฤดูกาล': 'season'\n",
+        "}, inplace=True)\n"
+      ],
+      "metadata": {
+        "id": "dk-n-QpsQR4d"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "formula = 'cases ~ temp_15d_avg + C(village) + C(sub_district) + C(district) + C(month) + C(year) + C(quarter) + C(season)'\n"
+      ],
+      "metadata": {
+        "id": "ReJqUOWsNPAN"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import statsmodels.formula.api as smf\n",
+        "import statsmodels.api as sm\n",
+        "poisson_model = smf.glm(formula=formula, data=df_analysis, family=sm.families.Poisson()).fit()\n",
+        "print(poisson_model.summary())\n"
+      ],
+      "metadata": {
+        "id": "rJdobr6BQoD_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "\n",
+        "# ดึง summary table ของโมเดล\n",
+        "summary_df = poisson_model.summary2().tables[1].copy()\n",
+        "\n",
+        "# เพิ่ม exp(coef) เพื่อดูอัตราสัมพัทธ์\n",
+        "summary_df['exp(coef)'] = np.exp(summary_df['Coef.'])\n",
+        "\n",
+        "# กรองเฉพาะแถวที่มี p-value < 0.05 (มีนัยสำคัญทางสถิติ)\n",
+        "significant_vars = summary_df[summary_df['P>|z|'] < 0.05]\n",
+        "\n",
+        "# แสดงผล\n",
+        "print(\"=== ตัวแปรที่มีนัยสำคัญทางสถิติ (p < 0.05) ===\\n\")\n",
+        "print(significant_vars[['Coef.', 'P>|z|', 'exp(coef)']])\n"
+      ],
+      "metadata": {
+        "id": "eWntScR3RNG_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# ทดสอบโมเดล แบ่ง Train/Test Set"
+      ],
+      "metadata": {
+        "id": "XMWmfvQV-iRw"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "\n",
+        "X = df_analysis.drop(columns=['cases', 'วันพบผป'])  # ลบ target และวันที่ออก\n",
+        "y = df_analysis['cases']  # target คือ จำนวนผู้ป่วย\n",
+        "\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n"
+      ],
+      "metadata": {
+        "id": "4NEpXZJK-kNk"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เตรียมข้อมูล categorical (optional)"
+      ],
+      "metadata": {
+        "id": "PS3mvxqsRnzF"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "X_train = pd.get_dummies(X_train, drop_first=True)\n",
+        "X_test = pd.get_dummies(X_test, drop_first=True)\n",
+        "\n",
+        "# จัดให้ column เท่ากัน\n",
+        "X_test = X_test.reindex(columns=X_train.columns, fill_value=0)\n"
+      ],
+      "metadata": {
+        "id": "czyvwKxpRn8j"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "for col in encoded_df.columns:\n",
+        "    print(repr(col))\n"
+      ],
+      "metadata": {
+        "id": "0Lxp9X_1WeZ5"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "อันนี้คือรันตัวแปรตั้นหมด"
+      ],
+      "metadata": {
+        "id": "rTM55RtqYJnW"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "X = encoded_df.drop(columns=['จำนวนผู้ป่วยกลุ่ม'])  # ลบคอลัมน์เป้าหมายออก\n",
+        "y = encoded_df['จำนวนผู้ป่วยกลุ่ม']  # เลือกคอลัมน์เป้าหมายมาเป็น y\n"
+      ],
+      "metadata": {
+        "id": "h-Wim2dYYFw2"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(encoded_df.columns)\n"
+      ],
+      "metadata": {
+        "id": "7AuWyvxaWjjM"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## สร้าง XGBoost Model"
+      ],
+      "metadata": {
+        "id": "vXOrD_YyRpF1"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "\n",
+        "X_train, X_test, y_train, y_test = train_test_split(\n",
+        "    X, y, test_size=0.2, random_state=42\n",
+        ")\n"
+      ],
+      "metadata": {
+        "id": "r_wXoH_VYPp2"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "X_train = pd.get_dummies(X_train, drop_first=True)\n",
+        "X_test = pd.get_dummies(X_test, drop_first=True)\n",
+        "X_test = X_test.reindex(columns=X_train.columns, fill_value=0)\n"
+      ],
+      "metadata": {
+        "id": "xGcqhFEBYR8T"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "เอาตัวแปรมาทั้งหมด"
+      ],
+      "metadata": {
+        "id": "oVvUbdKvZeV8"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from xgboost import XGBRegressor\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "model = XGBRegressor(objective='reg:squarederror', random_state=42)\n",
+        "model.fit(X_train, y_train)\n",
+        "\n",
+        "y_pred = model.predict(X_test)\n",
+        "\n",
+        "print(\"MSE:\", mean_squared_error(y_test, y_pred))\n",
+        "print(\"R2:\", r2_score(y_test, y_pred))\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "YiRRb85rYTce"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "เฉพาะตัวแปรที่มีนัยสำคัญ"
+      ],
+      "metadata": {
+        "id": "BRQygvp8Zb8F"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from xgboost import XGBRegressor\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "model = XGBRegressor(objective='reg:squarederror', random_state=42)\n",
+        "model.fit(X_train, y_train)\n",
+        "\n",
+        "y_pred = model.predict(X_test)\n",
+        "\n",
+        "print(\"MSE:\", mean_squared_error(y_test, y_pred))\n",
+        "print(\"R²:\", r2_score(y_test, y_pred))\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "kpXXjxmFRpNP"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# randdom forest"
+      ],
+      "metadata": {
+        "id": "9Lz-z1XZY1ZK"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "significant_vars = ['district', 'season', 'age_group']\n"
+      ],
+      "metadata": {
+        "id": "sv_K4l7xY4Cv"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "# --- 1. ใช้ตัวแปรทั้งหมด ---\n",
+        "model_all = RandomForestRegressor(random_state=42)\n",
+        "model_all.fit(X_train, y_train)\n",
+        "y_pred_all = model_all.predict(X_test)\n",
+        "\n",
+        "print(\"Using all variables:\")\n",
+        "print(\"MSE:\", mean_squared_error(y_test, y_pred_all))\n",
+        "print(\"R2:\", r2_score(y_test, y_pred_all))\n",
+        "\n",
+        "\n",
+        "# --- 2. ใช้แค่ตัวแปรที่มีนัยสำคัญ ---\n",
+        "\n",
+        "# significant_vars = ['district', 'season', 'age_group']  # ตัวอย่าง\n",
+        "\n",
+        "selected_cols = []\n",
+        "for var in significant_vars:\n",
+        "    matched_cols = [col for col in X_train.columns if col.startswith(var)]\n",
+        "    selected_cols.extend(matched_cols)\n",
+        "\n",
+        "print(\"\\nSelected columns for modeling:\", selected_cols)\n",
+        "\n",
+        "X_train_sig = X_train[selected_cols]\n",
+        "X_test_sig = X_test[selected_cols]\n",
+        "\n",
+        "model_sig = RandomForestRegressor(random_state=42)\n",
+        "model_sig.fit(X_train_sig, y_train)\n",
+        "y_pred_sig = model_sig.predict(X_test_sig)\n",
+        "\n",
+        "print(\"\\nUsing significant variables only:\")\n",
+        "print(\"MSE:\", mean_squared_error(y_test, y_pred_sig))\n",
+        "print(\"R2:\", r2_score(y_test, y_pred_sig))\n"
+      ],
+      "metadata": {
+        "id": "iWqVuKWFZGc4"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "4lYHKCaZHP9W"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "V_Up9BQvHQBN"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "b9FzXe4wHQEy"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "3jC0lNrCHQH-"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "nL_UEuciHQLH"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# โหลดข้อมูลสภาพอากาศรายวัน"
+      ],
+      "metadata": {
+        "id": "dZ1x2CMzHQyT"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "# โหลดข้อมูลจากทุกชีทใน rain.xlsx\n",
+        "file_path = 'rain.xlsx'\n",
+        "xls = pd.ExcelFile(file_path)\n",
+        "\n",
+        "df_list = []\n",
+        "for sheet in xls.sheet_names:\n",
+        "    df = pd.read_excel(xls, sheet_name=sheet)\n",
+        "    df = df.rename(columns={'ปี': 'year', 'เดือน': 'month', 'วันที่': 'day'})\n",
+        "    df['วัน'] = pd.to_datetime(df[['year', 'month', 'day']])\n",
+        "    df_list.append(df)\n",
+        "\n",
+        "# รวมชีททั้งหมดเข้าด้วยกันและเรียงตามวัน\n",
+        "weather_all = pd.concat(df_list, ignore_index=True)\n",
+        "weather_all = weather_all.sort_values('วัน').reset_index(drop=True)\n",
+        "weather_all.to_excel('rain_all_years_sorted.xlsx', index=False)\n",
+        "print(\"✅ บันทึกไฟล์ rain_all_years_sorted.xlsx เรียบร้อยแล้ว\")\n"
+      ],
+      "metadata": {
+        "id": "dCOpsFsrHUZ-"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# โหลดข้อมูลผู้ป่วย"
+      ],
+      "metadata": {
+        "id": "XtXBoEB9HXEq"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# โหลดข้อมูลผู้ป่วยจากทุกชีท\n",
+        "xls = pd.ExcelFile('DHFcc1.xlsx')\n",
+        "df_list = []\n",
+        "\n",
+        "for sheet in xls.sheet_names:\n",
+        "    df = pd.read_excel(xls, sheet_name=sheet)\n",
+        "    df['วันเริ่มป่วย'] = pd.to_datetime(df['วันเริ่มป่วย'], errors='coerce')\n",
+        "    df_list.append(df)\n",
+        "\n",
+        "patients = pd.concat(df_list, ignore_index=True)\n",
+        "patients = patients.dropna(subset=['วันเริ่มป่วย'])  # ลบแถวที่ไม่มีวันเริ่มป่วย\n",
+        "print(f\"จำนวนผู้ป่วยที่มีวันเริ่มป่วย: {len(patients)}\")\n"
+      ],
+      "metadata": {
+        "id": "wliy25bBHYHy"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# คำนวณค่าอุณหภูมิและฝนย้อนหลัง 15 วัน"
+      ],
+      "metadata": {
+        "id": "fj1DGh2wHagP"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "weather = pd.read_excel('rain_all_years_sorted.xlsx')\n",
+        "weather['วัน'] = pd.to_datetime(weather['วัน'])\n",
+        "\n",
+        "def get_rolling_avg(date, n_days=15):\n",
+        "    start_date = date - pd.Timedelta(days=n_days)\n",
+        "    mask = (weather['วัน'] >= start_date) & (weather['วัน'] < date)\n",
+        "    subset = weather.loc[mask]\n",
+        "    if subset.empty:\n",
+        "        return pd.Series([None, None])\n",
+        "    return pd.Series([\n",
+        "        subset['อุณหภูมิ'].mean(),\n",
+        "        subset['ฝน'].mean()\n",
+        "    ])\n",
+        "\n",
+        "patients[['temp_15d_avg', 'rain_15d_avg']] = patients['วันเริ่มป่วย'].apply(get_rolling_avg)\n",
+        "print(\"✅ คำนวณค่าเฉลี่ย temp และ rain ย้อนหลัง 15 วันเสร็จสิ้น\")\n"
+      ],
+      "metadata": {
+        "id": "xOBvLbB3HcoC"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# สร้างตัวแปรตามเวลา (เดือน ไตรมาส ฤดูกาล)"
+      ],
+      "metadata": {
+        "id": "LNowSB7CHfRL"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "patients['ปี'] = patients['วันเริ่มป่วย'].dt.year\n",
+        "patients['เดือน'] = patients['วันเริ่มป่วย'].dt.month\n",
+        "patients['ไตรมาส'] = patients['วันเริ่มป่วย'].dt.quarter\n",
+        "\n",
+        "def assign_season(month):\n",
+        "    if month in [3, 4, 5]:\n",
+        "        return 'Summer'\n",
+        "    elif month in [6, 7, 8, 9]:\n",
+        "        return 'Rainy'\n",
+        "    else:\n",
+        "        return 'Winter'\n",
+        "\n",
+        "patients['ฤดูกาล'] = patients['เดือน'].apply(assign_season)\n"
+      ],
+      "metadata": {
+        "id": "iqEpkEnoHhcv"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# สร้างตารางสรุปรายวัน"
+      ],
+      "metadata": {
+        "id": "RqSVf1YOHlZb"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "daily_counts = patients.groupby('วันพบผป').size().reset_index(name='จำนวนผู้ป่วย')\n",
+        "\n",
+        "daily_weather = patients.groupby('วันพบผป').agg({\n",
+        "    'temp_15d_avg': 'mean',\n",
+        "    'rain_15d_avg': 'mean'\n",
+        "}).reset_index()\n",
+        "\n",
+        "df_analysis = pd.merge(daily_counts, daily_weather, on='วันพบผป', how='left')\n"
+      ],
+      "metadata": {
+        "id": "SjV1eJmsHmPI"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# : รวมข้อมูลอื่น ๆ (Demographic และภูมิศาสตร์)"
+      ],
+      "metadata": {
+        "id": "qEVc2ZazHo6p"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "daily_vars = patients.groupby('วันพบผป').agg({\n",
+        "    'อายุ(ปี)': 'mean',\n",
+        "    'อายุ(เดือน)': 'mean',\n",
+        "    'เพศ': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'อาชีพ': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ชื่อหมู่บ้าน': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ตำบล': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'อำเภอ': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'เดือน': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ปี': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ไตรมาส': lambda x: x.mode()[0] if not x.mode().empty else None,\n",
+        "    'ฤดูกาล': lambda x: x.mode()[0] if not x.mode().empty else None\n",
+        "}).reset_index()\n",
+        "\n",
+        "df_analysis = pd.merge(df_analysis, daily_vars, on='วันพบผป', how='left')\n"
+      ],
+      "metadata": {
+        "id": "SRbOq9auHqZZ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# ตรวจสอบความสัมพันธ์ (Correlation / Chi-Square)"
+      ],
+      "metadata": {
+        "id": "qTxpJUaSH1vF"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from scipy.stats import chi2_contingency\n",
+        "\n",
+        "# --- แยกตัวแปร ---\n",
+        "numeric_vars = ['อายุ(ปี)', 'อายุ(เดือน)', 'temp_15d_avg', 'rain_15d_avg']\n",
+        "categorical_vars = ['เพศ', 'อาชีพ', 'ชื่อหมู่บ้าน', 'ตำบล', 'อำเภอ', 'เดือน', 'ปี', 'ไตรมาส', 'ฤดูกาล']\n",
+        "\n",
+        "# --- สร้างคอลัมน์กลุ่มจำนวนผู้ป่วยแบบแบ่ง 3 กลุ่ม ---\n",
+        "df_analysis['จำนวนผู้ป่วยกลุ่ม'] = pd.qcut(df_analysis['จำนวนผู้ป่วย'], q=3, labels=False, duplicates='drop')\n",
+        "\n",
+        "# === Correlation ===\n",
+        "print(\"=== Numeric Variables Correlation with จำนวนผู้ป่วย ===\")\n",
+        "for var in numeric_vars:\n",
+        "    corr = df_analysis[var].corr(df_analysis['จำนวนผู้ป่วย'])\n",
+        "    print(f\"{var} vs จำนวนผู้ป่วย: correlation = {corr:.4f}\")\n",
+        "\n",
+        "# === Chi-square test ===\n",
+        "print(\"\\n=== Categorical Variables Association with จำนวนผู้ป่วย (Chi-square test) ===\")\n",
+        "for var in categorical_vars:\n",
+        "    table = pd.crosstab(df_analysis[var], df_analysis['จำนวนผู้ป่วยกลุ่ม'])\n",
+        "    if table.shape[0] < 2 or table.shape[1] < 2:\n",
+        "        print(f\"{var} – ข้อมูลไม่พอสำหรับ Chi-square\")\n",
+        "        continue\n",
+        "    chi2, p, dof, ex = chi2_contingency(table)\n",
+        "    print(f\"{var} vs จำนวนผู้ป่วย (กลุ่ม): p-value = {p:.4f}\")\n"
+      ],
+      "metadata": {
+        "id": "dL1IFBhEH3s0"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(df_analysis.columns.tolist())\n"
+      ],
+      "metadata": {
+        "id": "nXCjkDJkLokh"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Regression Modeling (Poisson และ NB)"
+      ],
+      "metadata": {
+        "id": "FQrXl_m4H87X"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import statsmodels.api as sm\n",
+        "import statsmodels.formula.api as smf\n",
+        "\n",
+        "df_analysis.rename(columns={\n",
+        "    'จำนวนผู้ป่วย': 'cases',\n",
+        "    'อายุ(ปี)': 'age_year',\n",
+        "    'อายุ(เดือน)': 'age_month',\n",
+        "    'เพศ': 'gender',\n",
+        "    'อาชีพ': 'occupation',\n",
+        "    'ชื่อหมู่บ้าน': 'village',\n",
+        "    'ตำบล': 'sub_district',\n",
+        "    'อำเภอ': 'district',\n",
+        "    'เดือน': 'month',\n",
+        "    'ปี': 'year',\n",
+        "    'ไตรมาส': 'quarter',\n",
+        "    'ฤดูกาล': 'season',\n",
+        "    'temp_15d_avg': 'temp',\n",
+        "    'rain_15d_avg': 'rain'\n",
+        "}, inplace=True)\n",
+        "\n",
+        "formula = 'cases ~ temp + rain + C(gender) + C(occupation) + C(village) + C(sub_district) + C(district) + C(month) + C(year) + C(quarter) + C(season)'\n",
+        "\n",
+        "poisson_model = smf.glm(formula=formula, data=df_analysis, family=sm.families.Poisson()).fit()\n",
+        "print(poisson_model.summary())\n"
+      ],
+      "metadata": {
+        "id": "5-MSYg6YH-nO"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "ดึงตัวแปรที่มีนัยสำคัญ"
+      ],
+      "metadata": {
+        "id": "1PHSt84uIH9b"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# ดึงตัวแปรที่มีนัยสำคัญ"
+      ],
+      "metadata": {
+        "id": "o8XR9D9tIK5A"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import numpy as np\n",
+        "\n",
+        "summary_df = poisson_model.summary2().tables[1].copy()\n",
+        "summary_df['exp(coef)'] = np.exp(summary_df['Coef.'])\n",
+        "significant_vars_df = summary_df[summary_df['P>|z|'] < 0.05]\n",
+        "print(significant_vars_df[['Coef.', 'P>|z|', 'exp(coef)']])\n"
+      ],
+      "metadata": {
+        "id": "waBdtvptIM4p"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Machine Learning ด้วย XGBoost & Random Forest"
+      ],
+      "metadata": {
+        "id": "UBkeiZD3IQLg"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "from xgboost import XGBRegressor\n",
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "X = df_analysis.drop(columns=['cases', 'วันพบผป'])\n",
+        "y = df_analysis['cases']\n",
+        "\n",
+        "X = pd.get_dummies(X, drop_first=True)\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
+        "X_test = X_test.reindex(columns=X_train.columns, fill_value=0)\n",
+        "\n",
+        "# --- XGBoost ---\n",
+        "xgb_model = XGBRegressor(objective='reg:squarederror', random_state=42)\n",
+        "xgb_model.fit(X_train, y_train)\n",
+        "y_pred_xgb = xgb_model.predict(X_test)\n",
+        "\n",
+        "print(\"XGBoost - MSE:\", mean_squared_error(y_test, y_pred_xgb))\n",
+        "print(\"XGBoost - R2:\", r2_score(y_test, y_pred_xgb))\n",
+        "\n",
+        "# --- Random Forest ---\n",
+        "rf_model = RandomForestRegressor(random_state=42)\n",
+        "rf_model.fit(X_train, y_train)\n",
+        "y_pred_rf = rf_model.predict(X_test)\n",
+        "\n",
+        "print(\"\\nRandom Forest - MSE:\", mean_squared_error(y_test, y_pred_rf))\n",
+        "print(\"Random Forest - R2:\", r2_score(y_test, y_pred_rf))\n"
+      ],
+      "metadata": {
+        "id": "aeKjNnU3ISGg"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# ดึงตัวแปรที่มีนัยสำคัญ (p < 0.05)"
+      ],
+      "metadata": {
+        "id": "IuHlUZ3II-CG"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import statsmodels.formula.api as smf\n",
+        "import numpy as np\n",
+        "\n",
+        "# สร้างสูตร\n",
+        "formula = 'cases ~ temp_15d_avg + C(village) + C(sub_district) + C(district) + C(month) + C(year) + C(quarter) + C(season)'\n",
+        "\n",
+        "# เทรน Poisson model\n",
+        "poisson_model = smf.glm(formula=formula, data=df_analysis, family=sm.families.Poisson()).fit()\n",
+        "\n",
+        "# แสดงผล\n",
+        "print(poisson_model.summary())\n"
+      ],
+      "metadata": {
+        "id": "pJBoJuo7I-8a"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(df_analysis.columns.tolist())\n"
+      ],
+      "metadata": {
+        "id": "ESASus9CKJNi"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        " สร้างชุดข้อมูลที่มีเฉพาะตัวแปรสำคัญ"
+      ],
+      "metadata": {
+        "id": "KSXUQ5YIJD04"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "selected_cols = []\n",
+        "for var in significant_var_names:\n",
+        "    base_var = var.split('[')[0]  # เช่น จาก 'C(district)[T.บางกรวย]' เอาแค่ 'C(district)'\n",
+        "    matched_cols = [col for col in X_train.columns if col.startswith(base_var)]\n",
+        "    selected_cols.extend(matched_cols)\n",
+        "\n",
+        "# สร้าง X_train และ X_test ที่ใช้เฉพาะตัวแปรสำคัญ\n",
+        "X_train_sig = X_train[selected_cols]\n",
+        "X_test_sig = X_test[selected_cols]\n"
+      ],
+      "metadata": {
+        "id": "XKw8XQdDJEik"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# เทรนโมเดล Random Forest และ XGBoost ด้วยตัวแปรที่มีนัยสำคัญ"
+      ],
+      "metadata": {
+        "id": "hjK_h7G2JH4Y"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from xgboost import XGBRegressor\n",
+        "from sklearn.metrics import mean_squared_error, r2_score\n",
+        "\n",
+        "# --- Random Forest ---\n",
+        "model_rf_sig = RandomForestRegressor(random_state=42)\n",
+        "model_rf_sig.fit(X_train_sig, y_train)\n",
+        "y_pred_rf_sig = model_rf_sig.predict(X_test_sig)\n",
+        "\n",
+        "print(\"\\n🎯 Random Forest (เฉพาะตัวแปรที่มีนัยสำคัญ):\")\n",
+        "print(\"MSE:\", mean_squared_error(y_test, y_pred_rf_sig))\n",
+        "print(\"R²:\", r2_score(y_test, y_pred_rf_sig))\n",
+        "\n",
+        "# --- XGBoost ---\n",
+        "model_xgb_sig = XGBRegressor(objective='reg:squarederror', random_state=42)\n",
+        "model_xgb_sig.fit(X_train_sig, y_train)\n",
+        "y_pred_xgb_sig = model_xgb_sig.predict(X_test_sig)\n",
+        "\n",
+        "print(\"\\n🎯 XGBoost (เฉพาะตัวแปรที่มีนัยสำคัญ):\")\n",
+        "print(\"MSE:\", mean_squared_error(y_test, y_pred_xgb_sig))\n",
+        "print(\"R²:\", r2_score(y_test, y_pred_xgb_sig))\n"
+      ],
+      "metadata": {
+        "id": "1fLdV7u2JIvt"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"Significant variables:\", significant_vars)\n",
+        "print(\"Matched columns in X_train:\")\n",
+        "for var in significant_vars:\n",
+        "    matched = [col for col in X_train.columns if col.startswith(var)]\n",
+        "    print(f\"{var}: {matched}\")\n"
+      ],
+      "metadata": {
+        "id": "VR2710BdJdwR"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
